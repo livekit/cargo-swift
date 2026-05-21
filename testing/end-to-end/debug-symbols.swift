@@ -164,6 +164,21 @@ for subframework in subframeworks {
         exit(1)
     }
 
+    // 2b. CFBundleIdentifier should match the framework's dSYM convention
+    // (com.apple.xcode.dsym.<framework>.framework) — not the raw .dylib name
+    // that cargo's dsymutil emits. Cosmetic but matches what Xcode produces
+    // for archive-built frameworks and what crash-reporter vendors expect.
+    let plist = NSDictionary(contentsOfFile: dsymInfoPlist) as? [String: Any] ?? [:]
+    let expectedID = "com.apple.xcode.dsym.\(xcFrameworkName).framework"
+    guard (plist["CFBundleIdentifier"] as? String) == expectedID else {
+        error("\(slicePath): dSYM CFBundleIdentifier should be \(expectedID), got \(plist["CFBundleIdentifier"] ?? "<nil>")")
+        exit(1)
+    }
+    guard (plist["CFBundlePackageType"] as? String) == "dSYM" else {
+        error("\(slicePath): dSYM CFBundlePackageType should be 'dSYM'")
+        exit(1)
+    }
+
     // 3. UUID parity. dSYMs are matched to binaries by Mach-O LC_UUID; if the
     // dSYM's UUID set isn't a superset of the framework binary's, lldb /
     // App Store Connect can't symbolicate.

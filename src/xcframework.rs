@@ -399,6 +399,31 @@ fn prepare_target_dsym(
         })?;
     }
 
+    // Rewrite CFBundleIdentifier so the dSYM Info.plist reports the framework
+    // identifier (com.apple.xcode.dsym.<framework>.framework) instead of the
+    // value cargo's dsymutil inherited from the raw .dylib build artifact
+    // (com.apple.xcode.dsym.lib<crate>.dylib). Symbolication keys on Mach-O
+    // UUIDs, so this is cosmetic — but it's what Apple's tooling emits for
+    // archive-built frameworks and what crash-reporter vendors expect.
+    let info_plist = staged.join("Contents/Info.plist");
+    if info_plist.exists() {
+        let bundle_id = format!("com.apple.xcode.dsym.{framework_name}.framework");
+        let status = Command::new("plutil")
+            .args(["-replace", "CFBundleIdentifier", "-string"])
+            .arg(&bundle_id)
+            .arg(&info_plist)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .status()
+            .context("Failed to run plutil on dSYM Info.plist")?;
+        if !status.success() {
+            return Err(anyhow!(
+                "plutil failed rewriting CFBundleIdentifier in {info_plist:?}"
+            )
+            .into());
+        }
+    }
+
     if per_arch_dsyms.len() > 1 {
         let mut lipo = Command::new("lipo");
         for d in &per_arch_dsyms {

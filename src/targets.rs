@@ -133,8 +133,14 @@ impl Display for Mode {
 }
 
 impl Target {
+    /// Builds with `cargo rustc --lib --crate-type <lib_type>` rather than
+    /// `cargo build`. If the crate's `crate-type` also lists an rlib ("lib"),
+    /// `cargo build` emits every listed type and Cargo silently drops
+    /// `-C lto`, because an rlib cannot be LTO'd. Selecting only the type being
+    /// packaged keeps the profile's LTO setting, and builds nothing unused.
     fn cargo_build_commands(
         &self,
+        lib_type: LibType,
         mode: Mode,
         features: &FeatureOptions,
         toolchain_targets: &ToolchainTargets,
@@ -143,12 +149,15 @@ impl Target {
             .into_iter()
             .map(|arch| {
                 let mut cmd = if toolchain_targets.needs_build_std(arch) {
-                    command("cargo +nightly build -Z build-std")
+                    command("cargo +nightly rustc -Z build-std")
                 } else if toolchain_targets.use_nightly() {
-                    command("cargo +nightly build")
+                    command("cargo +nightly rustc")
                 } else {
-                    command("cargo build")
+                    command("cargo rustc")
                 };
+                cmd.arg("--lib")
+                    .arg("--crate-type")
+                    .arg(lib_type.identifier());
                 cmd.arg("--target").arg(arch);
 
                 match mode {
@@ -210,7 +219,7 @@ impl Target {
         features: &FeatureOptions,
         toolchain_targets: &ToolchainTargets,
     ) -> Vec<Command> {
-        self.cargo_build_commands(mode, features, toolchain_targets)
+        self.cargo_build_commands(lib_type, mode, features, toolchain_targets)
             .into_iter()
             .chain(self.lipo_commands(lib_name, mode, lib_type))
             .collect()

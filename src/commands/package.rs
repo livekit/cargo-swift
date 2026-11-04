@@ -73,6 +73,7 @@ pub fn run(
     bundle_identifier: Option<String>,
     exclude_arch: Vec<String>,
     debug_symbols: bool,
+    select_crate_type: bool,
 ) -> Result<()> {
     // Show deprecation warning if --xcframework-name is used
     if xcframework_name.is_some() {
@@ -107,6 +108,7 @@ pub fn run(
             bundle_identifier,
             &exclude_arch,
             debug_symbols,
+            select_crate_type,
         );
     } else if package_name.is_some() {
         Err("Package name can only be specified when building a single crate!")?;
@@ -133,6 +135,7 @@ pub fn run(
                 bundle_identifier.clone(),
                 &exclude_arch,
                 debug_symbols,
+                select_crate_type,
             )
         })
         .filter_map(|result| result.err())
@@ -158,6 +161,7 @@ fn run_for_crate(
     bundle_identifier: Option<String>,
     exclude_arch: &[String],
     debug_symbols: bool,
+    select_crate_type: bool,
 ) -> Result<()> {
     let lib = current_crate
         .targets
@@ -296,6 +300,7 @@ fn run_for_crate(
             &crate_name,
             mode,
             lib_type,
+            select_crate_type,
             config,
             &features,
             &toolchain_targets,
@@ -768,16 +773,25 @@ fn generate_bindings_with_output(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_with_output(
     target: &Target,
     lib_name: &str,
     mode: Mode,
     lib_type: LibType,
+    select_crate_type: bool,
     config: &Config,
     features: &FeatureOptions,
     toolchain_targets: &ToolchainTargets,
 ) -> Result<()> {
-    let mut commands = target.commands(lib_name, mode, lib_type, features, toolchain_targets);
+    let mut commands = target.commands(
+        lib_name,
+        mode,
+        lib_type,
+        select_crate_type,
+        features,
+        toolchain_targets,
+    );
     for command in &mut commands {
         command.env("CARGO_TERM_COLOR", "always");
     }

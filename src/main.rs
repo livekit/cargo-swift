@@ -157,6 +157,14 @@ enum Action {
         /// lipo's the per-arch DWARF binaries to match each xcframework slice
         /// and passes them to `xcodebuild -create-xcframework -debug-symbols`.
         debug_symbols: bool,
+
+        #[arg(long = "select-crate-type")]
+        /// Build with `cargo rustc --lib --crate-type <lib-type>` instead of
+        /// `cargo build`, so only the packaged library type is emitted. Use
+        /// this when the crate's crate-type also lists "lib": Cargo can't LTO
+        /// an rlib, so `cargo build` silently drops `-C lto` and the packaged
+        /// library is built without LTO even when the profile enables it.
+        select_crate_type: bool,
     },
 }
 
@@ -191,6 +199,7 @@ fn main() -> ExitCode {
             bundle_identifier,
             exclude_arch,
             debug_symbols,
+            select_crate_type,
         } => package::run(
             platforms,
             target.as_deref(),
@@ -211,6 +220,7 @@ fn main() -> ExitCode {
             bundle_identifier,
             exclude_arch,
             debug_symbols,
+            select_crate_type,
         ),
     };
 

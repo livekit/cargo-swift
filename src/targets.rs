@@ -133,8 +133,15 @@ impl Display for Mode {
 }
 
 impl Target {
+    /// With `select_crate_type`, builds with `cargo rustc --lib --crate-type
+    /// <lib_type>` rather than `cargo build`. If the crate's `crate-type` also
+    /// lists an rlib ("lib"), `cargo build` emits every listed type and Cargo
+    /// silently drops `-C lto`, because an rlib cannot be LTO'd. Selecting only
+    /// the type being packaged keeps the profile's LTO setting.
     fn cargo_build_commands(
         &self,
+        lib_type: LibType,
+        select_crate_type: bool,
         mode: Mode,
         features: &FeatureOptions,
         toolchain_targets: &ToolchainTargets,
@@ -142,13 +149,19 @@ impl Target {
         self.architectures()
             .into_iter()
             .map(|arch| {
+                let subcommand = if select_crate_type { "rustc" } else { "build" };
                 let mut cmd = if toolchain_targets.needs_build_std(arch) {
-                    command("cargo +nightly build -Z build-std")
+                    command(format!("cargo +nightly {subcommand} -Z build-std"))
                 } else if toolchain_targets.use_nightly() {
-                    command("cargo +nightly build")
+                    command(format!("cargo +nightly {subcommand}"))
                 } else {
-                    command("cargo build")
+                    command(format!("cargo {subcommand}"))
                 };
+                if select_crate_type {
+                    cmd.arg("--lib")
+                        .arg("--crate-type")
+                        .arg(lib_type.identifier());
+                }
                 cmd.arg("--target").arg(arch);
 
                 match mode {
@@ -207,13 +220,20 @@ impl Target {
         lib_name: &str,
         mode: Mode,
         lib_type: LibType,
+        select_crate_type: bool,
         features: &FeatureOptions,
         toolchain_targets: &ToolchainTargets,
     ) -> Vec<Command> {
-        self.cargo_build_commands(mode, features, toolchain_targets)
-            .into_iter()
-            .chain(self.lipo_commands(lib_name, mode, lib_type))
-            .collect()
+        self.cargo_build_commands(
+            lib_type,
+            select_crate_type,
+            mode,
+            features,
+            toolchain_targets,
+        )
+        .into_iter()
+        .chain(self.lipo_commands(lib_name, mode, lib_type))
+        .collect()
     }
 
     /// Returns the names of all target architectures for this target
